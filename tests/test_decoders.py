@@ -48,6 +48,39 @@ def test_zlib():
     assert response.content == body
 
 
+@pytest.mark.parametrize("wbits", [zlib.MAX_WBITS, -zlib.MAX_WBITS])
+@pytest.mark.parametrize("chunk_size", [1, 2])
+def test_deflate_streaming_small_chunks(wbits, chunk_size):
+    body = b"test 123"
+    compressor = zlib.compressobj(wbits=wbits)
+    compressed = compressor.compress(body) + compressor.flush()
+    chunks = (
+        compressed[i : i + chunk_size] for i in range(0, len(compressed), chunk_size)
+    )
+
+    response = httpx.Response(
+        200, headers={"Content-Encoding": "deflate"}, content=chunks
+    )
+    assert response.read() == body
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("wbits", [zlib.MAX_WBITS, -zlib.MAX_WBITS])
+async def test_deflate_async_streaming_small_chunks(wbits):
+    body = b"test 123"
+    compressor = zlib.compressobj(wbits=wbits)
+    compressed = compressor.compress(body) + compressor.flush()
+
+    async def chunks() -> typing.AsyncIterator[bytes]:
+        for i in range(len(compressed)):
+            yield compressed[i : i + 1]
+
+    response = httpx.Response(
+        200, headers={"Content-Encoding": "deflate"}, content=chunks()
+    )
+    assert await response.aread() == body
+
+
 def test_gzip():
     body = b"test 123"
     compressor = zlib.compressobj(9, zlib.DEFLATED, zlib.MAX_WBITS | 16)

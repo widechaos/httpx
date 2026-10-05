@@ -62,9 +62,17 @@ class DeflateDecoder(ContentDecoder):
 
     def __init__(self) -> None:
         self.first_attempt = True
+        self.initial_data = b""
         self.decompressor = zlib.decompressobj()
 
     def decode(self, data: bytes) -> bytes:
+        if self.first_attempt:
+            # zlib needs both header bytes before it can reject raw deflate.
+            self.initial_data += data
+            if len(self.initial_data) < 2:
+                return b""
+            data = self.initial_data
+            self.initial_data = b""
         was_first_attempt = self.first_attempt
         self.first_attempt = False
         try:
